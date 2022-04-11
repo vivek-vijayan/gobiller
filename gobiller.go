@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
 )
 
 type Biller struct {
@@ -20,8 +19,9 @@ func getAllBillersName(db *sql.DB) []Biller {
 	allBillers := []Biller{}
 	rows, err := db.Query("SELECT * FROM BILLER")
 	if err != nil {
-		log.Fatal(err.Error)
+		log.Fatal(err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		rows.Scan(&result)
 		allBillers = append(allBillers, result)
@@ -29,7 +29,7 @@ func getAllBillersName(db *sql.DB) []Biller {
 	return allBillers
 }
 
-func postgresqlConnector(wg sync.WaitGroup) *sql.DB {
+func postgresqlConnector(channel chan *sql.DB) {
 	scanner := bufio.NewScanner(os.Stdin)
 	// !<<<<<<<  HIGHLY SECURE PURPOSE ONLY >>>>>>>>>>
 	fmt.Print("Enter the username: ")
@@ -44,25 +44,29 @@ func postgresqlConnector(wg sync.WaitGroup) *sql.DB {
 	scanner.Scan()
 	database := scanner.Text()
 
+	username = "vivekvijayan"
+	password = ""
+	database = "houserenew"
 	fmt.Println("Connecting to Postgresql data ...")
 	connectionString := "postgresql://" + username + ":" + password + "@127.0.0.1:5432/" + database
 	db, err := sql.Open("postgres", connectionString)
-	defer wg.Done()
+
 	if err == nil {
 		panic(err)
 	}
-	return db
+	channel <- db
+	close(channel)
 }
 
 func main() {
-	wg := sync.WaitGroup{}
-
 	fmt.Println("📝 Go Biller Application - Version : 1.0.0")
-	wg.Add(1)
-
 	databaseChannel := make(chan *sql.DB)
-	go postgresqlConnector(wg)
+	go postgresqlConnector(databaseChannel)
 	fmt.Println("Getting the key ... 🚀")
-	databaseKey := <-databaseChannel
+	databaseKey, err := <-databaseChannel
+	if !err {
+		fmt.Println("Success")
+	}
 	fmt.Println("Collected key to the database ✅")
+	getAllBillersName(databaseKey)
 }
